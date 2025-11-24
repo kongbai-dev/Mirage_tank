@@ -1,198 +1,302 @@
 <script setup>
-import { ref } from 'vue';
+import { ref ,shallowRef } from 'vue';
 import { loadImage, generateMirgeTank } from './utils/imageProcessor.js';
+import { UploadFilled, Picture, Download, MagicStick } from '@element-plus/icons-vue'; 
+import { ElButton, ElUpload, ElMessage } from 'element-plus';
+const lightFile = shallowRef(null);
+const darkFile = shallowRef(null);
 const imgLightSrc = ref(null);
 const imgDarkSrc = ref(null);
 const resultSrc = ref(null);
 const isProcessing = ref(false);
+const isWhiteBg = ref(true);
 const previewBg = ref('white');
 
 let imgLightObj = null;
 let imgDarkObj = null;
 
-const handleFileChange = async (event, type) => {
-  const file = event.target.files[0];
-  if (!file) return;
+const handleFileChange = async (UploadFile, type) => {
+  const file = UploadFile.raw;
+  
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error("请上传有效的图片文件。");
+    return;
+  }
 
   try {
     const img = await loadImage(file);
     if (type === 'light') {
       imgLightObj = img;
+      lightFile.value = file;
       imgLightSrc.value = img.src;
     } else {
       imgDarkObj = img;
+      darkFile.value = file;
       imgDarkSrc.value = img.src;
     } 
   } catch (error) {
     console.error("图片加载失败", error);
-    alert("图片加载失败，请重试。");
+    ElMessage.error("图片加载失败，请重试。");
   }
 };
-const makeImages = async () => {
-  if (!imgLightObj || !imgDarkObj) {
-    alert("请先上传两张图片。")
+
+const handleGenerate = async () => {
+  if (!lightFile.value || !darkFile.value) {
+    ElMessage.warning("请先上传两张图片。");
     return;
   }
-
   isProcessing.value = true;
 
   setTimeout(async () => {
     try {
       resultSrc.value = await generateMirgeTank(imgLightObj, imgDarkObj);
+      ElMessage.success("幻影坦克生成成功！");
     } catch (error) {
       console.error("图像处理失败", error);
-      alert("图像处理失败，请重试。");
+      ElMessage.error("图像处理失败，请重试。");
     } finally {
       isProcessing.value = false;
     }
   }, 100);
 };
 
-const toggleBg = () => {
-  previewBg.value = previewBg.value === 'white' ? 'black' : 'white';
-};
-
-const downloadImage = () => {
+const handleDownload = () => {
   if (!resultSrc.value) return;
   const a = document.createElement('a');
   a.href = resultSrc.value;
-  a.download = 'mirge_tank_result.png';
+  a.download = `mirge_tank_${Date.now()}.png`;
   a.click();
-}
+};
 </script>
 
 <template>
-  <div class="container">
-    <h1 class="title">Mirge Tank 图片生成器</h1>
+  <el-container class="app-container">
+    <el-header class="header">
+      <h1>👻幻影坦克生成器</h1>z 
 
-    <div class="upload-section">
-      <div class="upload-box">
-      <h3>表层图片</h3>
-      <input type="file" accept="image/*" @change="(e) => handleFileChange(e,'light')"/>
-      <div class="preview" v-if="imgLightSrc">
-        <img :src="imgLightSrc" alt="表图预览"/>
-      </div>
-    </div>
+    </el-header>
+    <el-main>
+      <el-row :gutter="40">
+        <el-col :md="10" :sm="24">
+          <el-card class="control-panel">
+            <template #header>
+              <div class="card-header">
+                <span>🛠️ 制作面板</span>
+              </div>
+            </template>
 
-      <div class="upload-box">
-      <h3>里层图片</h3>
-      <input type="file" accept="image/*" @change="(e) => handleFileChange(e, 'dark')" />
-      <div class="preview" v-if="imgDarkSrc">
-        <img :src="imgDarkSrc" alt="里图预览" />
-      </div>
-    </div>
-    </div>
+            <div class="upload-group">
+              <div class="label-text">
+                1. 表层图(在白色背景)
+              </div>
+              <el-upload
+              class="upload-area"
+              drag
+              action="#"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="(file) => handleFileChange(file, 'light')"
+              >
+                <img v-if="imgLightSrc" :src="imgLightSrc" class="preview-thumb"/>
+                <div v-else class="el-upload__text">
+                  <el-icon class="el-icon--upload"><upload-filled/></el-icon>
+                  <div>拖拽或点击上传 <br/> <small>选亮色图</small></div>
+                </div>
+              </el-upload>
+            </div>
 
-    
+            <div class="upload-group">
+              <div class="label-text">2. 里层图 (在黑色背景显示)</div>
+              <el-upload
+              class="upload-area"
+              drag
+              action="#"
+              :auto-upload="false"
+              :show-file-list="false"
+              :on-change="(file) => handleFileChange(file, 'dark')"
+              >
+                <img v-if="imgDarkSrc" :src="imgDarkSrc" class="preview-thumb"/>
+                <div v-else class="el-upload__text">
+                  <el-icon class="el-icon--upload"><upload-filled/></el-icon>
+                  <div>拖拽或点击上传 <br/> <small>选暗色图</small></div>
+                </div>
+              </el-upload>
+            </div>
 
-    
+            <div class="actions">
+              <el-button
+                type="primary"
+                size="large"
+                :icon="MagicStick"
+                :loading="isProcessing"
+                class="full-btn"
+                @click="handleGenerate">
+                开始合成
+              </el-button>
+            </div>
+          </el-card>
+        </el-col>
 
-    <div class="actions">
-      <button @click="makeImages" :disabled="isProcessing || !imgLightSrc || !imgDarkSrc">
-        {{ isProcessing ? '合成中...' : '生成幻影坦克' }}
-      </button>
-    </div>
-
-    <div class="result-section" v-if="resultSrc">
-      <h3>生成结果</h3>
-      <p class="tip">点击下方按钮切换背景色预览，点击图片下载</p>
-      
-      <div class="toggle-bar">
-        <button @click="toggleBg">切换背景色 (当前: {{ previewBg === 'white' ? '白' : '黑' }})</button>
-      </div>
-
-      <div 
-        class="result-canvas" 
-        :style="{ backgroundColor: previewBg }"
-        @click="downloadImage"
-        title="点击下载"
-      >
-        <img :src="resultSrc" class="final-image" />
-      </div>
-    </div>
-  </div>
-
+        <el-col :md="14" :sm="24" class="result-col">
+          <el-card class="result-panel">
+            <template #header>
+              <div class="card-header">
+                <span>效果预览</span>
+                <el-switch
+                  v-model="isWhiteBg"
+                  active-text="白底(表图)"
+                  inactive-text="黑底(里图)"
+                  inline-prompt
+                  style="--el-switch-on-color: #dcdfe6; --el-switch-off-color: #000000"
+                  :disabled="!resultSrc"
+                  />
+              </div>
+            </template>
+            <div
+              class="canvas-container"
+              :class="{ 'is-dark': !isWhiteBg, 'has-image' : !!resultSrc }"
+              >
+              <el-empty v-if="!resultSrc" description="左侧上传并合成后在此预览" />
+              <img v-else :src="resultSrc" class="result-image" />
+            </div>
+            <div class="footer-actions" v-if="resultSrc">
+              <el-button type="success" :icon="Download" @click="handleDownload">
+                下载 PNG 图片
+              </el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </el-main>
+  </el-container>
 </template>
 
 <style scoped>
-.container {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  font-family: Arial, sans-serif;
-  text-align: center;
-}
-
-.upload-section {
+.control-panel, .result-panel {
+  height: 100%;
   display: flex;
-  gap: 20px;
-  justify-content: center;
-  margin-bottom: 30px;
-  flex-wrap: wrap;
+  flex-direction: column;
 }
-
-.upload-box {
-  border: 2px dashed #ccc;
-  padding: 20px;
-  border-radius: 8px;
-  width: 300px;
+.control-panel :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
-
-.preview img {
-  max-width: 100%;
-  max-height: 200px;
-  margin-top: 10px;
-  border-radius: 4px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-}
-
-button {
-  padding: 10px 20px;
-  font-size: 16px;
-  background-color: #42b983;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-button:hover:not(:disabled) {
-  background-color: #3aa876;
-}
-
-.result-section {
-  margin-top: 40px;
-  border-top: 1px solid #eee;
+.action {
+  margin-top: auto;
   padding-top: 20px;
 }
-
-.result-canvas {
-  display: inline-block;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background-color 0.3s;
+.result-panel :deep(.el-card__body) {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
-
-.final-image {
-  max-width: 100%;
-  max-height: 400px;
+.canvas-container {
+  flex: 1;
+  min-height: 400px;
 }
-
-.toggle-bar {
-  margin-bottom: 10px;
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  min-height: 100vh;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif, '微软雅黑';
 }
-
-.toggle-bar button {
-  background-color: #666;
+.header {
+  text-align: center;
+  margin-bottom: 20px;
+  color: #303133;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: bold;
+}
+.upload-group {
+  margin-bottom: 20px;
+}
+.label-text {
+  margin-bottom: 8px;
   font-size: 14px;
-  padding: 5px 10px;
+  color: #606266;
+  font-weight: 500;
+}
+.upload-area :deep(.el-upload-dragger) {
+  padding: 10px;
+  height: 160px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.preview-thumb {
+  max-height: 100%;
+  max-width: 100%;
+
+}
+.full-btn {
+  width: 100%;
+  font-weight: bold;
+  font-size: 16px;
+}
+.result-col {
+  margin-top: 20px;
+}
+@media (min-width: 992px) {
+  .result-col {
+    margin-top: 0;
+  }
+}
+.canvas-container {
+  height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 8px;
+  border: 1px solid #dcbfe6;
+  transition: background-color 0.3s;
+  position: relative;
+  overflow: hidden;
+
+  background-image:
+    linear-gradient(45deg, #eee 25%, transparent 25%),
+    linear-gradient(-45deg, #eee 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #eee 75%),
+    linear-gradient(-45deg, transparent 75%, #eee 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+  background-color: #fff;
+}
+.canvas-container.is-dark {
+  background: #000 !important;
+}
+.result-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+
+  filter: drop-shadow(0 0 5px rgba(0,0,0,0.1));
+}
+.footer-actions {
+  margin-top: 20px;
+  text-align: center;
+}
+.el-icon--upload {
+  font-size: 60px;
+  color: #a8abb2;
+  margin-bottom: 10px;
+  transition: color 0.3s;
+}
+.el-upload__text {
+  color: #606266;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+.el-upload__text small {
+  color: #909399;
+  font-size: 12px;
+}
+.upload-area:hover :deep(.el-icon--upload) {
+  color: #409eff;
 }
 </style>
