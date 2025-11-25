@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 
-import MirageTank from '../views/MirageTank.vue';
-import PrismTank from '../views/PrismTank.vue';
+//import MirageTank from '../views/MirageTank.vue';
+//import PrismTank from '../views/PrismTank.vue';
 
 const routes = [
     {
@@ -11,12 +11,12 @@ const routes = [
     {
         path: '/mirage',
         name: 'Mirage',
-        component: MirageTank
+        component: () => import('../views/MirageTank.vue')
     },
     {
         path: '/prism',
         name: 'Prism',
-        component: PrismTank
+        component: () => import('../views/PrismTank.vue')
     }
 ];
 
