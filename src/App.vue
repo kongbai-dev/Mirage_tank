@@ -1,21 +1,34 @@
 <script setup>
 import { ref ,shallowRef } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 import { loadImage, generateMirgeTank } from './utils/imageProcessor.js';
-import { UploadFilled, Picture, Download, MagicStick } from '@element-plus/icons-vue'; 
-import { ElButton, ElUpload, ElMessage } from 'element-plus';
-const lightFile = shallowRef(null);
-const darkFile = shallowRef(null);
-const imgLightSrc = ref(null);
-const imgDarkSrc = ref(null);
+import { UploadFilled, Picture, Download, MagicStick, Delete } from '@element-plus/icons-vue'; 
+//import { ElButton, ElUpload, ElMessage } from 'element-plus';
+
+
 const resultSrc = ref(null);
 const isProcessing = ref(false);
 const isWhiteBg = ref(true);
 const previewBg = ref('white');
 
-let imgLightObj = null;
-let imgDarkObj = null;
 
-const handleFileChange = async (UploadFile, type) => {
+const uploadConfig = ref([
+  {
+    id: 'light',
+    label: '1. 表层图(在白色背景显示)',
+    sublabel: '选亮色图',
+    src: null,
+    file: null,
+  },
+  {
+    id: 'dark',
+    label: '2. 里层图 (在黑色背景显示)',
+    sublabel: '选暗色图',
+    src: null,
+    file: null,
+  }
+]);
+const handleFileChange = async (UploadFile, index) => {
   const file = UploadFile.raw;
   
   if (!file.type.startsWith('image/')) {
@@ -25,15 +38,9 @@ const handleFileChange = async (UploadFile, type) => {
 
   try {
     const img = await loadImage(file);
-    if (type === 'light') {
-      imgLightObj = img;
-      lightFile.value = file;
-      imgLightSrc.value = img.src;
-    } else {
-      imgDarkObj = img;
-      darkFile.value = file;
-      imgDarkSrc.value = img.src;
-    } 
+    uploadConfig.value[index].src = img.src;
+    uploadConfig.value[index].file = img;
+
   } catch (error) {
     console.error("图片加载失败", error);
     ElMessage.error("图片加载失败，请重试。");
@@ -41,7 +48,7 @@ const handleFileChange = async (UploadFile, type) => {
 };
 
 const handleGenerate = async () => {
-  if (!lightFile.value || !darkFile.value) {
+  if (!uploadConfig.value[0].file || !uploadConfig.value[1].file) {
     ElMessage.warning("请先上传两张图片。");
     return;
   }
@@ -49,7 +56,7 @@ const handleGenerate = async () => {
 
   setTimeout(async () => {
     try {
-      resultSrc.value = await generateMirgeTank(imgLightObj, imgDarkObj);
+      resultSrc.value = await generateMirgeTank(uploadConfig.value[0].file, uploadConfig.value[1].file);
       ElMessage.success("幻影坦克生成成功！");
     } catch (error) {
       console.error("图像处理失败", error);
@@ -67,6 +74,31 @@ const handleDownload = () => {
   a.download = `mirge_tank_${Date.now()}.png`;
   a.click();
 };
+const handleRemove = (index) => {
+  uploadConfig.value[index].src = null;
+  uploadConfig.value[index].file = null;
+};
+const handlePaste = (event) => {
+  const items = event.clipboardData.items;
+  if (items) {
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind.indexOf('image')!== -1) {
+        const file = items[i].getAsFile();
+        if (!uploadConfig.value[0].file) {
+          handleFileChange({ raw: file } , 0);
+        }else if (!uploadConfig.value[1].file) {
+          handleFileChange({ raw: file } , 1);
+        }
+      }
+    }
+  }
+}
+onMounted(() => {
+  document.addEventListener('paste', handlePaste);
+});
+onUnmounted(() => {
+  document.removeEventListener('paste', handlePaste);
+})
 </script>
 
 <template>
@@ -85,44 +117,30 @@ const handleDownload = () => {
               </div>
             </template>
 
-            <div class="upload-group">
-              <div class="label-text">
-                1. 表层图(在白色背景)
-              </div>
+            <div v-for="(item, index) in uploadConfig" :key="item.id" class="upload-group">
+              <div class="label-text">{{ item.label }}</div>
               <el-upload
-              class="upload-area"
-              drag
-              action="#"
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="(file) => handleFileChange(file, 'light')"
-              >
-                <img v-if="imgLightSrc" :src="imgLightSrc" class="preview-thumb"/>
+                class="upload-area"
+                drag
+                action="#"
+                :auto-upload="false"
+                :show-file-list="false"
+                :on-change="(file) => handleFileChange(file, index)"
+                >
+                <div v-if="item.src" class="preview-container" @click.stop>
+                  <img :src="item.src" class="preview-thumb"></img>
+                  <div class="preview-mask">
+                    <el-icon @click="handleRemove(index)"><Delete/></el-icon>
+                  </div>
+                </div>
+                <!-- <img v-if="item.src" :src="item.src" class="preview-thumb"/> -->
                 <div v-else class="el-upload__text">
                   <el-icon class="el-icon--upload"><upload-filled/></el-icon>
-                  <div>拖拽或点击上传 <br/> <small>选亮色图</small></div>
+                  <div>拖拽或点击上传 <br/> <small>{{ item.sublabel }}</small></div>
                 </div>
               </el-upload>
             </div>
-
-            <div class="upload-group">
-              <div class="label-text">2. 里层图 (在黑色背景显示)</div>
-              <el-upload
-              class="upload-area"
-              drag
-              action="#"
-              :auto-upload="false"
-              :show-file-list="false"
-              :on-change="(file) => handleFileChange(file, 'dark')"
-              >
-                <img v-if="imgDarkSrc" :src="imgDarkSrc" class="preview-thumb"/>
-                <div v-else class="el-upload__text">
-                  <el-icon class="el-icon--upload"><upload-filled/></el-icon>
-                  <div>拖拽或点击上传 <br/> <small>选暗色图</small></div>
-                </div>
-              </el-upload>
-            </div>
-
+            
             <div class="actions">
               <el-button
                 type="primary"
@@ -160,7 +178,7 @@ const handleDownload = () => {
               <img v-else :src="resultSrc" class="result-image" />
             </div>
             <div class="footer-actions" v-if="resultSrc">
-              <el-button type="success" :icon="Download" @click="handleDownload">
+              <el-button type="success" :icon="Download" class="button-download" @click="handleDownload">
                 下载 PNG 图片
               </el-button>
             </div>
@@ -176,6 +194,10 @@ const handleDownload = () => {
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+.button-download {
+  width: 100%;
+  max-width: 300px;
 }
 .control-panel :deep(.el-card__body) {
   flex: 1;
@@ -197,14 +219,15 @@ const handleDownload = () => {
 }
 .app-container {
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   min-height: 100vh;
   font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif, '微软雅黑';
 }
 .header {
   text-align: center;
-  margin-bottom: 20px;
-  color: #303133;
+  margin-bottom: 40px;
+  color: #409eff;
 }
 .card-header {
   display: flex;
@@ -227,6 +250,33 @@ const handleDownload = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+.preview-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.preview-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.3s;
+  cursor: pointer;
+  font-size: 24px;
+  color: white;
+}
+.preview-container:hover .preview-mask {
+  opacity: 1;
 }
 .preview-thumb {
   max-height: 100%;
